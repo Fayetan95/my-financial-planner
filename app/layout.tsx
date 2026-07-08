@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "vibe-stack-supabase",
-  description: "Next.js + Supabase starter",
+  title: "My Financial Planner",
+  description: "Run a no-login retirement projection with saved results and recommendations.",
+  openGraph: {
+    title: "My Financial Planner",
+    description: "Run a no-login retirement projection with saved results and recommendations.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

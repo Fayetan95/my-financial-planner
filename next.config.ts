@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // lint issues. Type errors are compile-time only and don't affect runtime,
   // so we don't let them block a deployment.
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+  outputFileTracingRoot: process.cwd(),
 };
 
 export default nextConfig;
