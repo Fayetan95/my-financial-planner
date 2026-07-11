@@ -2,14 +2,10 @@ import { createAdminClient } from "./admin";
 
 export async function fetchProjectionBundle(projectionId?: string) {
   const supabase = createAdminClient();
-  let projectionQuery = supabase
-    .from("projections")
-    .select("*, plan_inputs(*)")
-    .order("created_at", { ascending: false })
-    .limit(1);
+  let projectionQuery = supabase.from("projections").select("*").order("created_at", { ascending: false }).limit(1);
 
   if (projectionId) {
-    projectionQuery = supabase.from("projections").select("*, plan_inputs(*)").eq("id", projectionId).limit(1);
+    projectionQuery = supabase.from("projections").select("*").eq("id", projectionId).limit(1);
   }
 
   const { data: projectionRows, error: projectionError } = await projectionQuery;
@@ -17,6 +13,14 @@ export async function fetchProjectionBundle(projectionId?: string) {
 
   const projection = projectionRows?.[0];
   if (!projection) return null;
+
+  const { data: planInput, error: planInputError } = await supabase
+    .from("plan_inputs")
+    .select("*")
+    .eq("id", projection.plan_input_id)
+    .single();
+
+  if (planInputError) throw planInputError;
 
   const { data: recommendations, error: recommendationError } = await supabase
     .from("recommendations")
@@ -27,7 +31,7 @@ export async function fetchProjectionBundle(projectionId?: string) {
   if (recommendationError) throw recommendationError;
 
   return {
-    plan_input: projection.plan_inputs,
+    plan_input: planInput,
     projection,
     recommendations: recommendations || [],
   };
