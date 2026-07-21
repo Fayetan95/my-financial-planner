@@ -10,7 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { PlannerRecord, RiskProfile } from "@/lib/planner/types";
+import { projectPlan } from "@/lib/planner/engine";
+import type { PlanInput, PlannerRecord, ProjectionResult, RiskProfile } from "@/lib/planner/types";
 
 type FormState = {
   age: string;
@@ -70,6 +71,17 @@ function labelFromKey(key: keyof FormState) {
   }[key];
 }
 
+function planInputFromForm(form: FormState): PlanInput {
+  return {
+    age: Number(form.age),
+    annual_income: Number(form.annual_income),
+    monthly_savings: Number(form.monthly_savings),
+    current_savings: Number(form.current_savings),
+    target_retirement_age: Number(form.target_retirement_age),
+    risk_profile: form.risk_profile,
+  };
+}
+
 export function PlannerApp() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [record, setRecord] = useState<PlannerRecord | null>(null);
@@ -113,11 +125,20 @@ export function PlannerApp() {
   }, []);
 
   const clientErrors = useMemo(() => validateClientForm(form), [form]);
-  const projection = record?.projection;
+  const livePlanInput = useMemo(() => planInputFromForm(form), [form]);
+  const liveProjection = useMemo<ProjectionResult | null>(
+    () => (Object.keys(clientErrors).length ? null : projectPlan(livePlanInput)),
+    [clientErrors, livePlanInput],
+  );
+  const projection = liveProjection || record?.projection;
   const planInputId = record?.plan_input?.id;
   const protectionAreas = useMemo(
-    () => buildProtectionSnapshot(record?.plan_input || null),
-    [record?.plan_input],
+    () => buildProtectionSnapshot(livePlanInput),
+    [livePlanInput],
+  );
+  const hasLiveChanges = Boolean(
+    record?.plan_input &&
+      JSON.stringify(form) !== JSON.stringify(fromPlan(record)),
   );
 
   useEffect(() => {
@@ -214,6 +235,7 @@ export function PlannerApp() {
 
             <nav aria-label="Planning sections" className="flex flex-wrap gap-2">
               {[
+                { href: "#personal-information", label: "Personal information" },
                 { href: "#retirement-planning", label: "Retirement planning" },
                 { href: "#insurance-planning", label: "Insurance planning" },
                 { href: "#recommendations", label: "Priorities" },
@@ -232,17 +254,23 @@ export function PlannerApp() {
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[400px_1fr]">
-        <section className="self-start rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm lg:sticky lg:top-6">
+        <section
+          className="self-start rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm lg:sticky lg:top-6"
+          id="personal-information"
+        >
           <div className="mb-5">
             <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1f7a65]">
-              Retirement planning
+              Shared inputs
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-normal text-[#14213d]">
-              Run a retirement plan in under 30 seconds.
+              Personal information
             </h2>
+            <p className="mt-2 text-sm leading-6 text-[#667085]">
+              Update these once and the retirement and insurance planning sections recalculate together.
+            </p>
           </div>
 
-          <form className="space-y-4" id="retirement-planning" onSubmit={submitPlan} noValidate>
+          <form className="space-y-4" onSubmit={submitPlan} noValidate>
             {(
               [
                 "age",
@@ -290,7 +318,7 @@ export function PlannerApp() {
               disabled={isSubmitting}
               type="submit"
             >
-              {isSubmitting ? "Running plan..." : "Run My Plan"}
+              {isSubmitting ? "Saving plan..." : "Save My Plan"}
             </button>
           </form>
 
@@ -343,45 +371,62 @@ export function PlannerApp() {
           ) : null}
           {projection && loadState === "ready" && !isSubmitting ? (
             <>
-              <div className="grid gap-4 md:grid-cols-3">
-                <Metric label="Retirement readiness" value={`${Math.round(projection.retirement_score)} / 100`} />
-                <Metric label="Projected balance" value={currency.format(projection.projected_balance)} />
-                <Metric
-                  label={projection.monthly_gap >= 0 ? "Monthly surplus" : "Monthly shortfall"}
-                  value={`${projection.monthly_gap >= 0 ? "+" : ""}${currency.format(projection.monthly_gap)}`}
-                />
-              </div>
+              <section className="space-y-4" id="retirement-planning">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1f7a65]">
+                    First planning block
+                  </p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-normal text-[#14213d]">
+                    Retirement planning
+                  </h2>
+                </div>
 
-              <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm">
-                <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-                  <div>
-                    <h2 className="text-xl font-semibold text-[#14213d]">Projected balance</h2>
-                    <p className="text-sm text-[#667085]">
-                      From age {record?.plan_input.age} to {record?.plan_input.target_retirement_age}
-                    </p>
+                {hasLiveChanges ? (
+                  <p className="rounded-md border border-[#b9e4d2] bg-[#edf7f3] px-3 py-2 text-sm font-medium text-[#155f4e]">
+                    Live estimate updated from your personal information. Save the plan when you want to keep this version.
+                  </p>
+                ) : null}
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Metric label="Retirement readiness" value={`${Math.round(projection.retirement_score)} / 100`} />
+                  <Metric label="Projected balance" value={currency.format(projection.projected_balance)} />
+                  <Metric
+                    label={projection.monthly_gap >= 0 ? "Monthly surplus" : "Monthly shortfall"}
+                    value={`${projection.monthly_gap >= 0 ? "+" : ""}${currency.format(projection.monthly_gap)}`}
+                  />
+                </div>
+
+                <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <h2 className="text-xl font-semibold text-[#14213d]">Projected balance</h2>
+                      <p className="text-sm text-[#667085]">
+                        From age {livePlanInput.age} to {livePlanInput.target_retirement_age}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#edf7f3] px-3 py-1 text-sm font-semibold text-[#155f4e]">
+                      {livePlanInput.risk_profile}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-[#edf7f3] px-3 py-1 text-sm font-semibold text-[#155f4e]">
-                    {record?.plan_input.risk_profile}
-                  </span>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer>
+                      <AreaChart data={projection.balance_curve} margin={{ left: 4, right: 12, top: 12, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="balance" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="5%" stopColor="#1f7a65" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#1f7a65" stopOpacity={0.03} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke="#e4ded2" strokeDasharray="3 3" />
+                        <XAxis dataKey="age" tickLine={false} />
+                        <YAxis tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`} tickLine={false} />
+                        <Tooltip formatter={(value) => currency.format(Number(value))} labelFormatter={(age) => `Age ${age}`} />
+                        <Area dataKey="balance" fill="url(#balance)" stroke="#1f7a65" strokeWidth={3} type="monotone" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer>
-                    <AreaChart data={projection.balance_curve} margin={{ left: 4, right: 12, top: 12, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="balance" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="5%" stopColor="#1f7a65" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#1f7a65" stopOpacity={0.03} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#e4ded2" strokeDasharray="3 3" />
-                      <XAxis dataKey="age" tickLine={false} />
-                      <YAxis tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`} tickLine={false} />
-                      <Tooltip formatter={(value) => currency.format(Number(value))} labelFormatter={(age) => `Age ${age}`} />
-                      <Area dataKey="balance" fill="url(#balance)" stroke="#1f7a65" strokeWidth={3} type="monotone" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              </section>
 
               <ProtectionSnapshot
                 areas={protectionAreas}
@@ -431,7 +476,7 @@ export function PlannerApp() {
   );
 }
 
-function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null): ProtectionArea[] {
+function buildProtectionSnapshot(planInput: PlanInput | null): ProtectionArea[] {
   const annualIncome = Number(planInput?.annual_income || 80000);
   const currentSavings = Number(planInput?.current_savings || 0);
   const monthlyIncome = annualIncome / 12;
@@ -515,7 +560,13 @@ function ProtectionSnapshot({
   return (
     <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm" id="insurance-planning">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold text-[#14213d]">Family Financial Protection Snapshot</h2>
+        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1f7a65]">
+          Second planning block
+        </p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-normal text-[#14213d]">
+          Insurance planning
+        </h2>
+        <h3 className="mt-3 text-xl font-semibold text-[#14213d]">Family Financial Protection Snapshot</h3>
         <p className="mt-1 text-sm text-[#667085]">
           Edit the suggested cover or enter existing cover to see the gap and which areas to tackle first.
         </p>
