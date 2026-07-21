@@ -27,6 +27,8 @@ type ProtectionArea = {
   purpose: string;
   priority: number;
   note: string;
+  formula: string;
+  example: string;
 };
 
 const defaultForm: FormState = {
@@ -79,6 +81,7 @@ export function PlannerApp() {
   const [message, setMessage] = useState("");
   const [lead, setLead] = useState({ name: "", email: "" });
   const [existingCoverage, setExistingCoverage] = useState<Record<string, string>>({});
+  const [suggestedCoverage, setSuggestedCoverage] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -116,6 +119,14 @@ export function PlannerApp() {
     () => buildProtectionSnapshot(record?.plan_input || null),
     [record?.plan_input],
   );
+
+  useEffect(() => {
+    setSuggestedCoverage(
+      Object.fromEntries(
+        protectionAreas.map((area) => [area.area, String(area.suggestedCover)]),
+      ),
+    );
+  }, [protectionAreas]);
 
   async function submitPlan(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -375,11 +386,25 @@ export function PlannerApp() {
               <ProtectionSnapshot
                 areas={protectionAreas}
                 existingCoverage={existingCoverage}
+                suggestedCoverage={suggestedCoverage}
                 onCoverageChange={(area, value) =>
                   setExistingCoverage((current) => ({
                     ...current,
                     [area]: value,
                   }))
+                }
+                onSuggestedChange={(area, value) =>
+                  setSuggestedCoverage((current) => ({
+                    ...current,
+                    [area]: value,
+                  }))
+                }
+                onSuggestedReset={(area) =>
+                  setSuggestedCoverage((current) => {
+                    const next = { ...current };
+                    delete next[area];
+                    return next;
+                  })
                 }
               />
 
@@ -410,6 +435,7 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
   const annualIncome = Number(planInput?.annual_income || 80000);
   const currentSavings = Number(planInput?.current_savings || 0);
   const monthlyIncome = annualIncome / 12;
+  const roundedMonthlyIncome = Math.round(monthlyIncome);
 
   return [
     {
@@ -418,6 +444,8 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
       purpose: "Income replacement",
       priority: 1,
       note: "Helps family replace lost income and keep long-term plans funded.",
+      formula: "About 10 years of income.",
+      example: `${currency.format(annualIncome)} income x 10 years = ${currency.format(annualIncome * 10)}.`,
     },
     {
       area: "Mortgage Protection",
@@ -425,6 +453,8 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
       purpose: "Protect home",
       priority: 2,
       note: "Use your outstanding loan balance when available; this estimate is a planning proxy.",
+      formula: "Use mortgage balance if known; otherwise estimate 5 years of income.",
+      example: `${currency.format(annualIncome)} income x 5 years = ${currency.format(annualIncome * 5)}.`,
     },
     {
       area: "Critical Illness",
@@ -432,6 +462,8 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
       purpose: "Recovery fund",
       priority: 3,
       note: "Creates breathing room for treatment, caregiving, and reduced work capacity.",
+      formula: "About 3 years of income for recovery time.",
+      example: `${currency.format(annualIncome)} income x 3 years = ${currency.format(annualIncome * 3)}.`,
     },
     {
       area: "Hospitalisation",
@@ -439,6 +471,8 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
       purpose: "Medical bills",
       priority: 4,
       note: "Targets out-of-pocket bills, deductibles, and upgrades not covered elsewhere.",
+      formula: "Starter buffer for deductibles, co-payments, and non-covered hospital costs.",
+      example: "Example: $50,000 can help absorb a large hospital bill before family savings are touched.",
     },
     {
       area: "Personal Accident",
@@ -446,13 +480,19 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
       purpose: "Accidents",
       priority: 5,
       note: "Covers accident-related disability, recovery costs, and temporary income disruption.",
+      formula: "About 2 years of income.",
+      example: `${currency.format(annualIncome)} income x 2 years = ${currency.format(annualIncome * 2)}.`,
     },
     {
       area: "Emergency Fund",
-      suggestedCover: Math.max(0, Math.round(monthlyIncome * 9 - currentSavings)),
+      suggestedCover: Math.round(monthlyIncome * 9),
       purpose: "Funds for 9 months",
       priority: 6,
-      note: "Shows extra cash reserve to build after counting current savings.",
+      note: "Cash reserve for job loss, family emergencies, or delayed claims.",
+      formula: "About 9 months of income.",
+      example: `${currency.format(roundedMonthlyIncome)} monthly income x 9 months = ${currency.format(
+        monthlyIncome * 9,
+      )}. Current savings shown in the planner: ${currency.format(currentSavings)}.`,
     },
   ];
 }
@@ -460,37 +500,49 @@ function buildProtectionSnapshot(planInput: PlannerRecord["plan_input"] | null):
 function ProtectionSnapshot({
   areas,
   existingCoverage,
+  suggestedCoverage,
   onCoverageChange,
+  onSuggestedChange,
+  onSuggestedReset,
 }: {
   areas: ProtectionArea[];
   existingCoverage: Record<string, string>;
+  suggestedCoverage: Record<string, string>;
   onCoverageChange: (area: string, value: string) => void;
+  onSuggestedChange: (area: string, value: string) => void;
+  onSuggestedReset: (area: string) => void;
 }) {
   return (
     <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm" id="insurance-planning">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-[#14213d]">Family Financial Protection Snapshot</h2>
         <p className="mt-1 text-sm text-[#667085]">
-          Enter existing cover to see the gap and which areas to tackle first.
+          Edit the suggested cover or enter existing cover to see the gap and which areas to tackle first.
         </p>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
+        <table className="w-full min-w-[1120px] border-separate border-spacing-0 text-left text-sm">
           <thead>
             <tr className="text-[#667085]">
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Priority</th>
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Protection Area</th>
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Suggested Cover</th>
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Purpose</th>
+              <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">How This Is Estimated</th>
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Existing Coverage</th>
               <th className="border-b border-[#e4ded2] py-3 pr-4 font-semibold">Gap</th>
             </tr>
           </thead>
           <tbody>
             {areas.map((area) => {
+              const suggestedValue = suggestedCoverage[area.area] ?? String(area.suggestedCover);
+              const suggested = Number(suggestedValue || 0);
               const existing = Number(existingCoverage[area.area] || 0);
-              const gap = Math.max(0, area.suggestedCover - (Number.isFinite(existing) ? existing : 0));
+              const normalizedSuggested = Number.isFinite(suggested) ? suggested : 0;
+              const normalizedExisting = Number.isFinite(existing) ? existing : 0;
+              const gap = Math.max(0, normalizedSuggested - normalizedExisting);
+              const isCustomSuggested = suggestedValue !== String(area.suggestedCover);
 
               return (
                 <tr className="align-top" key={area.area}>
@@ -503,10 +555,30 @@ function ProtectionSnapshot({
                     <p className="font-semibold text-[#14213d]">{area.area}</p>
                     <p className="mt-1 max-w-[240px] text-xs leading-5 text-[#667085]">{area.note}</p>
                   </td>
-                  <td className="border-b border-[#f0ece3] py-4 pr-4 font-semibold text-[#344054]">
-                    {currency.format(area.suggestedCover)}
+                  <td className="border-b border-[#f0ece3] py-4 pr-4">
+                    <input
+                      aria-label={`${area.area} suggested cover`}
+                      className="w-36 rounded-md border border-[#c9c1b1] px-3 py-2 text-sm font-semibold text-[#344054] outline-none focus:border-[#1f7a65] focus:ring-2 focus:ring-[#1f7a65]/20"
+                      inputMode="numeric"
+                      min="0"
+                      value={suggestedValue}
+                      onChange={(event) => onSuggestedChange(area.area, event.target.value)}
+                    />
+                    {isCustomSuggested ? (
+                      <button
+                        className="mt-2 block text-xs font-semibold text-[#155f4e] hover:text-[#1f7a65]"
+                        type="button"
+                        onClick={() => onSuggestedReset(area.area)}
+                      >
+                        Reset to {currency.format(area.suggestedCover)}
+                      </button>
+                    ) : null}
                   </td>
                   <td className="border-b border-[#f0ece3] py-4 pr-4 text-[#475467]">{area.purpose}</td>
+                  <td className="border-b border-[#f0ece3] py-4 pr-4 text-[#475467]">
+                    <p className="max-w-[260px] font-medium text-[#344054]">{area.formula}</p>
+                    <p className="mt-1 max-w-[260px] text-xs leading-5 text-[#667085]">{area.example}</p>
+                  </td>
                   <td className="border-b border-[#f0ece3] py-4 pr-4">
                     <input
                       aria-label={`${area.area} existing coverage`}
