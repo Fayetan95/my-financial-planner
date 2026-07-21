@@ -32,6 +32,14 @@ type ProtectionArea = {
   example: string;
 };
 
+type RetirementEducationItem = {
+  label: string;
+  figure: string;
+  meaning: string;
+  calculation: string;
+  example: string;
+};
+
 const defaultForm: FormState = {
   age: "35",
   annual_income: "80000",
@@ -46,6 +54,12 @@ const currency = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
+
+const riskReturnAssumptions: Record<RiskProfile, number> = {
+  conservative: 0.045,
+  moderate: 0.06,
+  aggressive: 0.075,
+};
 
 function fromPlan(record: PlannerRecord | null): FormState {
   if (!record?.plan_input) return defaultForm;
@@ -135,6 +149,10 @@ export function PlannerApp() {
   const protectionAreas = useMemo(
     () => buildProtectionSnapshot(livePlanInput),
     [livePlanInput],
+  );
+  const retirementEducation = useMemo(
+    () => (projection ? buildRetirementEducation(livePlanInput, projection) : []),
+    [livePlanInput, projection],
   );
   const hasLiveChanges = Boolean(
     record?.plan_input &&
@@ -426,6 +444,8 @@ export function PlannerApp() {
                     </ResponsiveContainer>
                   </div>
                 </div>
+
+                <RetirementEducation items={retirementEducation} />
               </section>
 
               <ProtectionSnapshot
@@ -474,6 +494,90 @@ export function PlannerApp() {
       </div>
     </main>
   );
+}
+
+function buildRetirementEducation(
+  planInput: PlanInput,
+  projection: ProjectionResult,
+): RetirementEducationItem[] {
+  const years = planInput.target_retirement_age - planInput.age;
+  const annualSavings = planInput.monthly_savings * 12;
+  const savingsRate = planInput.annual_income > 0 ? annualSavings / planInput.annual_income : 0;
+  const targetRetirementIncome = planInput.annual_income * 0.8;
+  const assumedReturn = riskReturnAssumptions[planInput.risk_profile];
+  const startingEmergencyTarget = (planInput.annual_income / 12) * 3;
+  const scoreParts = [
+    "starts at 25",
+    savingsRate >= 0.15 ? "+20 for saving at least 15% of income" : "no +20 yet because savings are below 15%",
+    projection.projected_balance >= projection.target_balance
+      ? "+30 for reaching the target balance"
+      : "no +30 yet because projected balance is below target",
+    planInput.current_savings >= startingEmergencyTarget
+      ? "+15 for having at least 3 months of income saved"
+      : "no +15 yet because current savings are below 3 months of income",
+    planInput.target_retirement_age >= 65 ? "+10 for retiring at 65 or later" : "no +10 because target age is before 65",
+  ];
+
+  if (
+    projection.monthly_gap < 0 &&
+    Math.abs(projection.projected_balance - projection.target_balance) >
+      projection.target_balance * 0.5
+  ) {
+    scoreParts.push("-30 because the projected gap is more than half of the target");
+  }
+
+  return [
+    {
+      label: "Retirement readiness",
+      figure: `${Math.round(projection.retirement_score)} / 100`,
+      meaning: "A simple health score for the plan. It rewards savings rate, reaching the target, cash buffer, and having more years to save.",
+      calculation: "Score starts at 25, then adds or subtracts points based on planning milestones.",
+      example: `For this plan: ${scoreParts.join("; ")}.`,
+    },
+    {
+      label: "Projected balance",
+      figure: currency.format(projection.projected_balance),
+      meaning: "Estimated amount at the target retirement age if current savings and monthly savings continue.",
+      calculation: "Current savings grow monthly, then monthly savings are added and compounded until retirement.",
+      example: `${currency.format(planInput.current_savings)} starts today, plus ${currency.format(
+        planInput.monthly_savings,
+      )} per month for ${years} years, using a ${(assumedReturn * 100).toFixed(1)}% yearly return assumption for a ${planInput.risk_profile} profile.`,
+    },
+    {
+      label: "Target balance",
+      figure: currency.format(projection.target_balance),
+      meaning: "A rough target for the retirement nest egg needed to replace income.",
+      calculation: "Annual income x 80%, then divided by 4%. This follows a common income-replacement and withdrawal-rate rule of thumb.",
+      example: `${currency.format(planInput.annual_income)} income x 80% = ${currency.format(
+        targetRetirementIncome,
+      )} yearly retirement income. ${currency.format(targetRetirementIncome)} / 4% = ${currency.format(
+        projection.target_balance,
+      )}.`,
+    },
+    {
+      label: projection.monthly_gap >= 0 ? "Monthly surplus" : "Monthly shortfall",
+      figure: `${projection.monthly_gap >= 0 ? "+" : ""}${currency.format(projection.monthly_gap)}`,
+      meaning:
+        projection.monthly_gap >= 0
+          ? "Estimated monthly cushion above the target path."
+          : "Estimated extra monthly savings needed to get closer to the target path.",
+      calculation: "The app compares projected balance with target balance, then spreads that gap over the remaining saving period with growth assumed.",
+      example: `Projected balance ${currency.format(projection.projected_balance)} minus target ${currency.format(
+        projection.target_balance,
+      )} = ${currency.format(projection.projected_balance - projection.target_balance)} overall gap.`,
+    },
+    {
+      label: "Savings rate",
+      figure: `${Math.round(savingsRate * 1000) / 10}%`,
+      meaning: "The share of annual income being saved for retirement.",
+      calculation: "Monthly savings x 12, divided by annual income.",
+      example: `${currency.format(planInput.monthly_savings)} x 12 = ${currency.format(
+        annualSavings,
+      )}. ${currency.format(annualSavings)} / ${currency.format(planInput.annual_income)} = ${
+        Math.round(savingsRate * 1000) / 10
+      }%. A common planning target is around 15%.`,
+    },
+  ];
 }
 
 function buildProtectionSnapshot(planInput: PlanInput | null): ProtectionArea[] {
@@ -540,6 +644,33 @@ function buildProtectionSnapshot(planInput: PlanInput | null): ProtectionArea[] 
       )}. Current savings shown in the planner: ${currency.format(currentSavings)}.`,
     },
   ];
+}
+
+function RetirementEducation({ items }: { items: RetirementEducationItem[] }) {
+  return (
+    <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-[#14213d]">How the Retirement Figures Are Estimated</h2>
+        <p className="mt-1 text-sm text-[#667085]">
+          These are planning estimates, not promises. They help explain the moving parts so the numbers feel less like a black box.
+        </p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {items.map((item) => (
+          <article className="rounded-md border border-[#e4ded2] bg-[#fbfaf7] p-4" key={item.label}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-base font-semibold text-[#14213d]">{item.label}</h3>
+              <p className="text-sm font-semibold text-[#155f4e]">{item.figure}</p>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#475467]">{item.meaning}</p>
+            <p className="mt-3 text-sm font-semibold text-[#344054]">{item.calculation}</p>
+            <p className="mt-1 text-xs leading-5 text-[#667085]">{item.example}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ProtectionSnapshot({
