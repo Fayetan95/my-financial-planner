@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "My Financial Planner",
+  title: "My financial planning",
   description: "Run a no-login retirement projection with saved results and recommendations.",
   openGraph: {
-    title: "My Financial Planner",
+    title: "My financial planning",
     description: "Run a no-login retirement projection with saved results and recommendations.",
     type: "website",
   },

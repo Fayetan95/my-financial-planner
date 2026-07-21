@@ -186,18 +186,52 @@ export function PlannerApp() {
 
   return (
     <main className="min-h-screen bg-[#f7f4ed] text-[#1f2933]">
-      <div className="mx-auto grid min-h-screen max-w-7xl gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[400px_1fr] lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1f7a65]">
+                Family planning dashboard
+              </p>
+              <h1 className="mt-2 text-4xl font-semibold tracking-normal text-[#14213d]">
+                My financial planning
+              </h1>
+              <p className="mt-2 max-w-2xl text-base leading-7 text-[#475467]">
+                Start with retirement readiness, then review family protection gaps and save the result.
+              </p>
+            </div>
+
+            <nav aria-label="Planning sections" className="flex flex-wrap gap-2">
+              {[
+                { href: "#retirement-planning", label: "Retirement planning" },
+                { href: "#insurance-planning", label: "Insurance planning" },
+                { href: "#recommendations", label: "Priorities" },
+                { href: "#save-results", label: "Save results" },
+              ].map((item) => (
+                <a
+                  className="rounded-md border border-[#c9c1b1] bg-white px-3 py-2 text-sm font-semibold text-[#344054] transition hover:border-[#1f7a65] hover:bg-[#edf7f3] hover:text-[#155f4e]"
+                  href={item.href}
+                  key={item.href}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </header>
+
+        <div className="grid gap-8 lg:grid-cols-[400px_1fr]">
         <section className="self-start rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm lg:sticky lg:top-6">
           <div className="mb-5">
             <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1f7a65]">
-              My Financial Planner
+              Retirement planning
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-[#14213d]">
+            <h2 className="mt-2 text-3xl font-semibold tracking-normal text-[#14213d]">
               Run a retirement plan in under 30 seconds.
-            </h1>
+            </h2>
           </div>
 
-          <form className="space-y-4" onSubmit={submitPlan} noValidate>
+          <form className="space-y-4" id="retirement-planning" onSubmit={submitPlan} noValidate>
             {(
               [
                 "age",
@@ -249,7 +283,7 @@ export function PlannerApp() {
             </button>
           </form>
 
-          <form className="mt-6 border-t border-[#e4ded2] pt-5" onSubmit={saveLead} noValidate>
+          <form className="mt-6 border-t border-[#e4ded2] pt-5" id="save-results" onSubmit={saveLead} noValidate>
             <h2 className="text-lg font-semibold text-[#14213d]">Save my results</h2>
             <div className="mt-3 grid gap-3">
               <label className="block">
@@ -349,7 +383,7 @@ export function PlannerApp() {
                 }
               />
 
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2" id="recommendations">
                 {record?.recommendations.map((recommendation) => (
                   <article className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm" key={recommendation.id}>
                     <div className="mb-3 flex items-start justify-between gap-3">
@@ -366,6 +400,7 @@ export function PlannerApp() {
             </>
           ) : null}
         </section>
+        </div>
       </div>
     </main>
   );
@@ -432,7 +467,7 @@ function ProtectionSnapshot({
   onCoverageChange: (area: string, value: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm">
+    <div className="rounded-lg border border-[#d8d1c2] bg-white p-5 shadow-sm" id="insurance-planning">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-[#14213d]">Family Financial Protection Snapshot</h2>
         <p className="mt-1 text-sm text-[#667085]">
